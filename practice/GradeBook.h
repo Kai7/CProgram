@@ -7,6 +7,7 @@ public:
     void setCourseName(string);
     string getCourseName();
     void displayMessage();
+    void determineClassAverage();
 private:
     string courseName;
 };

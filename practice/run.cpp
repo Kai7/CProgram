@@ -6,8 +6,7 @@ int main(){
     string nameOfCourse;
     GradeBook myGradeBook("abc");
 
-    cout << "Initial course name is: " << myGradeBook.getCourseName() 
-         << endl;
+    cout << "Initial course name is: " << myGradeBook.getCourseName() << endl;
 
     cout << "\nPlease enter the course name: ";
     getline(cin, nameOfCourse);
