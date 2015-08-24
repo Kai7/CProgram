@@ -3,14 +3,10 @@
 using namespace std;
 
 int main(){
-    string nameOfCourse;
-    GradeBook myGradeBook("abc");
+    GradeBook myGradeBook("C++ Programming Practice");
 
     cout << "Initial course name is: " << myGradeBook.getCourseName() << endl;
 
-    cout << "\nPlease enter the course name: ";
-    getline(cin, nameOfCourse);
-    myGradeBook.setCourseName(nameOfCourse);
-    cout << endl;
     myGradeBook.displayMessage();
+    myGradeBook.determineClassAverage();
 }
