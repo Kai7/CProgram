@@ -8,5 +8,7 @@ int main(){
     cout << "Initial course name is: " << myGradeBook.getCourseName() << endl;
 
     myGradeBook.displayMessage();
-    myGradeBook.determineClassAverage();
+    //myGradeBook.determineClassAverage();
+    myGradeBook.inputGrades();
+    myGradeBook.displayGradeReport();
 }
