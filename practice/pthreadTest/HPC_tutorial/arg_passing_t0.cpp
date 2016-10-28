@@ -20,7 +20,7 @@ void *PrintHello(void *threadid)
 {
     long taskid;
 
-    usleep(1000000);
+    usleep(500000);
     taskid = (long) threadid;
     printf("Thread %d: %s\n", taskid, messages[taskid]);
     pthread_exit(NULL);
