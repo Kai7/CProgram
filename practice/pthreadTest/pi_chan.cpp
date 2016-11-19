@@ -59,8 +59,8 @@ int main(int argc, char *argv[]) {
         /*printf("Main: completed join with thread %ld having a status of %ld\n",
                t, status); */ 
     }
-printf("pi=%lf\n", 4*static_cast<double>(total_circle) / static_cast<double>(total_toss_num));
-return(0);
-pthread_exit(NULL);
+    printf("pi=%lf\n", 4*static_cast<double>(total_circle) / static_cast<double>(total_toss_num));
+    return(0);
+    pthread_exit(NULL);
    
 }
