@@ -6,8 +6,12 @@
 #include <cmath>
 #include <iomanip>
 #include <utility>
+#include <time.h>
+#include <pthread.h>
 
 #include "fptree.h"
+
+#define NUMTHRDS 4
 
 using std::ifstream;
 using std::cout;
@@ -15,7 +19,6 @@ using std::endl;
 using std::setw;
 using std::stoi;
 using std::ceil;
-using std::pair;
 using std::make_pair;
 
 //using namespace std;
@@ -34,6 +37,7 @@ fptree::fptree(){
 }
 
 void fptree::mining(){
+    clock_t tStart = clock();
     // collect each item in header table
     vector<pair<int, fpnode*> > fp;
     for (map<int, fpnode*>::iterator it = this->htable->begin();
@@ -41,11 +45,65 @@ void fptree::mining(){
         fp.push_back(make_pair(it->first, it->second));
     }
 
+    pthread_t **thds = new pthread_t *[NUMTHRDS];
+    for (int i = 0; i < NUMTHRDS; i++) {
+        *(thds + i) = new pthread_t;
+    }
+
+    miningInfo **thdargs = new miningInfo *[NUMTHRDS];
+    miningInfo_helper **thdargs_helper = new miningInfo_helper *[NUMTHRDS];
+    int num_tasks = fp.size() / NUMTHRDS;
+    cout << "fp.size() = " << fp.size() << endl;
+    for (int i = 0; i < NUMTHRDS; i++) {
+        *(thdargs + i) = new miningInfo;
+        (*(thdargs + i))->task_id = i;
+        (*(thdargs + i))->idx_front = i * num_tasks;
+        if (i == NUMTHRDS - 1)
+            (*(thdargs + i))->idx_end = fp.size() - 1;
+        else
+            (*(thdargs + i))->idx_end = (i + 1) * num_tasks - 1;
+        //cout << "from: " << (*(thdargs + i))->idx_front << " , to: " << (*(thdargs + i))->idx_end << endl;
+        
+        (*(thdargs + i))->fp = &fp;
+
+        *(thdargs_helper + i) = new miningInfo_helper;
+        (*(thdargs_helper + i))->tree = this;
+        (*(thdargs_helper + i))->info = *(thdargs + i);
+
+        if (pthread_create(*(thds + i), NULL, parallel_mining_helper, (void *)*(thdargs_helper + i))) {
+            printf("ERROR: pthread_create fail.");
+            exit(-1);
+        }
+    }
+    for (int i = 0; i < NUMTHRDS; i++) {
+        pthread_join(**(thds + i), NULL);
+    }
     // we will mining the condition tree for each item
-    for (int i = 0; i < fp.size(); i++) {
-        int item = fp[i].first;
+    printf("mining time: %.2fs\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
+
+    cout << endl;
+    cout << "===== FP-Growth Report ====================" << endl;
+    cout << "Frequent Pattern count : " << this->fpcounter << endl;
+    cout << "===========================================" << endl;
+}
+
+void *fptree::parallel_mining_helper(void *helper_arg){
+    (((miningInfo_helper *)helper_arg)->tree->parallel_mining(((miningInfo_helper *)helper_arg)->info));
+}
+
+void fptree::parallel_mining(miningInfo *mining_info){
+    clock_t tStart = clock();
+    //if(mining_info->task_id != 3)
+    //    return;
+
+    int idx_front = mining_info->idx_front;
+    int idx_end = mining_info->idx_end;
+    vector<pair<int, fpnode*> > *fp = mining_info->fp;
+
+    for (int i = idx_front; i <= idx_end; i++) {
+        int item = (*fp)[i].first;
         int support = 0;
-        fpnode *nxtPtr = fp[i].second;
+        fpnode *nxtPtr = (*fp)[i].second;
 
         // collect each transaction for this item
         list<pair<int, list<int> > > condTransList;
@@ -91,18 +149,15 @@ void fptree::mining(){
         condtrans.push_back(item);
 
         this->fpcounter += 1;
-        showSupTransList(&condtrans, support);
+        //showSupTransList(&condtrans, support);
 
         if(condtree->root->eldest != nullptr){
             miningCondTree(&condtrans, condtree);
             this->fpcounter += condtree->fpcounter;
         }
     }
-
-    cout << endl;
-    cout << "===== FP-Growth Report ====================" << endl;
-    cout << "Frequent Pattern count : " << this->fpcounter << endl;
-    cout << "===========================================" << endl;
+    cout << "from " << idx_front << " to " << idx_end << endl;
+    printf("mining time: %.2fs\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
 }
 
 void fptree::miningCondTree(list<int> *condtrans, fptree *condtree){
@@ -151,7 +206,7 @@ void fptree::miningCondTree(list<int> *condtrans, fptree *condtree){
 
         condtrans->push_back(item);
 
-        showSupTransList(condtrans, support);
+        //showSupTransList(condtrans, support);
         condtree->fpcounter += 1;
 
         if(p_condtree->root->eldest != nullptr){
@@ -174,6 +229,7 @@ void fptree::buildTree(string transFile, double minsup) {
         return;
     };
 
+    clock_t tStart = clock();
     // scan the input database first to calculate the support of each item.
     map<int, int> supCounter;
     int transCounter = 0;
@@ -203,7 +259,9 @@ void fptree::buildTree(string transFile, double minsup) {
         else
             it->second += 1;
     }
+    printf("scan first time: %.2fs\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
 
+    tStart = clock();
     // set min sup for fp-tree
     this->minSupport = (int)ceil(minsup * transCounter);
 
@@ -244,6 +302,7 @@ void fptree::buildTree(string transFile, double minsup) {
 
         transList->clear();
     }
+    printf("build tree time: %.2fs\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
     cout << "building fptree complete!" << endl;
 
     return;

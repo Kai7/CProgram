@@ -18,7 +18,7 @@ int main(){
     //double minsup = 0.3;
     //string inputFile = "dataset/D1kT10N500.txt";
     string inputFile = "dataset/D100kT10N1k.txt";
-    double minsup = 0.001;
+    double minsup = 0.0002;
     
     fptree *fpt = new fptree();
 

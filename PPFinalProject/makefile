@@ -1,6 +1,6 @@
 # declare variables
 CC = g++
-CFLAGS = -std=c++11
+CFLAGS = -std=c++11 -lpthread 
 
 
 main_fpgrowth:main_fpgrowth.o fptree.o
