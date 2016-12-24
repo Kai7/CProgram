@@ -3,6 +3,7 @@
 #include <string>
 #include <cstddef>
 #include <map>
+#include <stack>
 #include <cmath>
 #include <iomanip>
 #include <utility>
@@ -20,6 +21,7 @@ using std::setw;
 using std::stoi;
 using std::ceil;
 using std::make_pair;
+using std::stack;
 
 //using namespace std;
 
@@ -28,6 +30,11 @@ void showHTable(map<int, fpnode*> *htable);
 void showSupTransList(list<int> *trans, int sup);
 void showTransList(vector<int> *trans);
 void showTransList(list<int> *trans);
+
+struct condminingInfo{
+    fptree *cond_tree;
+    list<int> *condtrans;
+};
 
 fptree::fptree(){
     root = new fpnode();
@@ -70,7 +77,7 @@ void fptree::mining(){
         (*(thdargs_helper + i))->tree = this;
         (*(thdargs_helper + i))->info = *(thdargs + i);
 
-        if (pthread_create(*(thds + i), NULL, parallel_mining_helper, (void *)*(thdargs_helper + i))) {
+        if (pthread_create(*(thds + i), NULL, parallel_mining, (void *)*(thdargs_helper + i))) {
             printf("ERROR: pthread_create fail.");
             exit(-1);
         }
@@ -87,15 +94,10 @@ void fptree::mining(){
     cout << "===========================================" << endl;
 }
 
-void *fptree::parallel_mining_helper(void *helper_arg){
-    (((miningInfo_helper *)helper_arg)->tree->parallel_mining(((miningInfo_helper *)helper_arg)->info));
-    return;
-}
-
-void fptree::parallel_mining(miningInfo *mining_info){
-    clock_t tStart = clock();
-    //if(mining_info->task_id != 3)
-    //    return;
+void *fptree::parallel_mining(void *helper_arg){
+    int *counter = 0;
+    fptree *main_fptree = ((miningInfo_helper *)helper_arg)->tree;
+    miningInfo *mining_info = ((miningInfo_helper *)helper_arg)->info;
 
     int idx_front = mining_info->idx_front;
     int idx_end = mining_info->idx_end;
@@ -103,6 +105,7 @@ void fptree::parallel_mining(miningInfo *mining_info){
 
     for (int i = idx_front; i <= idx_end; i++) {
         int item = (*fp)[i].first;
+        (*counter) += 1;
         int support = 0;
         fpnode *nxtPtr = (*fp)[i].second;
 
@@ -138,87 +141,102 @@ void fptree::parallel_mining(miningInfo *mining_info){
         }
 
         fptree *condtree = new fptree();
-        condtree->minSupport = this->minSupport;
+        condtree->minSupport = main_fptree->minSupport;
 
         list<pair<int, list<int> > >::iterator it = condTransList.begin();
         for (; it != condTransList.end(); it++) {
             int sup = it->first;
             condtree->addTrans(&(it->second), sup, &condsupCounter);
         }
+        
+        if(condtree->root->eldest == nullptr){
+            continue;
+        }
+
 
         list<int> condtrans;
+        stack<fptree*> condtree_stack;
+        stack<map<int, fpnode*>::iterator> condhtptr_stack;
+
         condtrans.push_back(item);
+        condtree_stack.push(condtree);
+        map<int, fpnode*>::iterator ht_it = condtree->htable->begin();
+        condhtptr_stack.push(ht_it);
+        //main_fptree->fpcounter += 1;
 
-        this->fpcounter += 1;
-        //showSupTransList(&condtrans, support);
+        //if(condtree->root->eldest != nullptr){
+        //    miningCondTree(&condtrans, condtree);
+        //    main_fptree->fpcounter += condtree->fpcounter;
+        //}
 
-        if(condtree->root->eldest != nullptr){
-            miningCondTree(&condtrans, condtree);
-            this->fpcounter += condtree->fpcounter;
-        }
-    }
-    cout << "from " << idx_front << " to " << idx_end << endl;
-    printf("mining time: %.2fs\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
-}
-
-void fptree::miningCondTree(list<int> *condtrans, fptree *condtree){
-    // mining the condition tree for each item in header table of condition tree
-    map<int, fpnode*>::iterator it = condtree->htable->begin();
-    for (; it != condtree->htable->end(); it++){
-        int item = it->first;
-        int support = 0;
-        fpnode *nxtPtr = it->second;
-
-        list<pair<int, list<int> > > condTransList;
-
-        map<int, int> condsupCounter;
-        while (nxtPtr != nullptr) {
-            int sup = nxtPtr->counter;
-            support += sup;
-            if (nxtPtr->parent->item != -1) {
-                list<int> transList;
-
-                fpnode *scanPtr = nxtPtr->parent;
-                while (scanPtr->item != -1) {
-                    transList.push_front(scanPtr->item);
-
-                    map<int, int>::iterator it =
-                        condsupCounter.find(scanPtr->item);
-                    if (it == condsupCounter.end()) {
-                        condsupCounter[scanPtr->item] = sup;
-                    } else {
-                        it->second += sup;
-                    }
-                    scanPtr = scanPtr->parent;
-                }
-                condTransList.push_back(make_pair(sup, transList));
+        while(!condtree_stack.empty()){
+            fptree *top_condtree = condtree_stack.top();
+            map<int, fpnode*>::iterator top_ht_it = condhtptr_stack.top();
+            condhtptr_stack.pop();
+            if(top_ht_it == top_condtree->htable->end()){
+                condtree_stack.pop();
+                condtrans.pop_back();
+                continue;
             }
-            nxtPtr = nxtPtr->nxt;
+
+            int p_item = top_ht_it->first;
+            (*counter) += 1;
+            condtrans.push_back(p_item);
+            int p_support = 0;
+            fpnode *p_nxtPtr = top_ht_it->second;
+            top_ht_it++;
+            condhtptr_stack.push(top_ht_it);
+
+            list<pair<int, list<int> > > p_condTransList;
+
+            map<int, int> p_condsupCounter;
+            while (p_nxtPtr != nullptr) {
+                int p_sup = p_nxtPtr->counter;
+                p_support += p_sup;
+                if (p_nxtPtr->parent->item != -1) {
+                    list<int> p_transList;
+
+                    fpnode *p_scanPtr = p_nxtPtr->parent;
+                    while (p_scanPtr->item != -1) {
+                        p_transList.push_front(p_scanPtr->item);
+
+                        map<int, int>::iterator p_it = p_condsupCounter.find(p_scanPtr->item);
+                        if (p_it == p_condsupCounter.end()) {
+                            p_condsupCounter[p_scanPtr->item] = p_sup;
+                        } else {
+                            p_it->second += p_sup;
+                        }
+                        p_scanPtr = p_scanPtr->parent;
+                    }
+                    p_condTransList.push_back(make_pair(p_sup, p_transList));
+                }
+                p_nxtPtr = p_nxtPtr->nxt;
+            }
+
+            fptree *p_condtree = new fptree();
+            p_condtree->minSupport = top_condtree->minSupport;
+
+            list<pair<int, list<int> > >::iterator p_itt = p_condTransList.begin();
+            for (; p_itt != p_condTransList.end(); p_itt++) {
+                int p_sup = p_itt->first;
+                p_condtree->addTrans(&(p_itt->second), p_sup, &p_condsupCounter);
+            }
+
+            //showSupTransList(condtrans, support);
+            //condtree->fpcounter += 1;
+
+            if(p_condtree->root->eldest != nullptr){
+                condtrans.pop_back();
+                continue;
+            }
+
+            condtree_stack.push(p_condtree);
+            map<int, fpnode*>::iterator p_ht_it = p_condtree->htable->begin();
+            condhtptr_stack.push(p_ht_it);
+
         }
-
-        fptree *p_condtree = new fptree();
-        p_condtree->minSupport = condtree->minSupport;
-
-        list<pair<int, list<int> > >::iterator itt = condTransList.begin();
-        for (; itt != condTransList.end(); itt++) {
-            int sup = itt->first;
-            p_condtree->addTrans(&(itt->second), sup, &condsupCounter);
-        }
-
-        condtrans->push_back(item);
-
-        //showSupTransList(condtrans, support);
-        condtree->fpcounter += 1;
-
-        if(p_condtree->root->eldest != nullptr){
-            miningCondTree(condtrans, p_condtree);
-            condtree->fpcounter += p_condtree->fpcounter;
-        }
-
-        condtrans->pop_back();
     }
-
-    return;
+    return( void*) counter;
 }
 
 void fptree::buildTree(string transFile, double minsup) {

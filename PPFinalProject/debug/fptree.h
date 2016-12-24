@@ -38,7 +38,6 @@ class fptree{
 public:
     fptree();
     void mining();
-    void parallel_mining(miningInfo *mining_info);
     void buildTree(string transFile, double minsup);
     int getFPCount();
 
@@ -49,7 +48,8 @@ private:
     int minSupport;
     int fpcounter;
 
-    static void *parallel_mining_helper(void *helper_arg);
+    static void *parallel_mining(void *helper_arg);
+    void parallel(miningInfo *mining_info);
     void miningCondTree(list<int> *condtrans, fptree *condtree);
     void addTrans(vector<int> *trans);
     void addTrans(list<int> *trans, int sup, map<int, int> *mapSup);
