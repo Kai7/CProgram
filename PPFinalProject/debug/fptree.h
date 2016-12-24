@@ -41,14 +41,13 @@ public:
     void buildTree(string transFile, double minsup);
     int getFPCount();
 
-private:
     struct fpnode *root;
     map<int, struct fpnode*> *htable;
     map<int, struct fpnode*> *lasthtable;
     int minSupport;
     int fpcounter;
 
-    static void *parallel_mining(void *helper_arg);
+    static void * parallel_mining(void *helper_arg);
     void parallel(miningInfo *mining_info);
     void miningCondTree(list<int> *condtrans, fptree *condtree);
     void addTrans(vector<int> *trans);

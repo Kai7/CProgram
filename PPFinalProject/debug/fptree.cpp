@@ -82,9 +82,25 @@ void fptree::mining(){
             exit(-1);
         }
     }
+    
+    void *fpcounter;
     for (int i = 0; i < NUMTHRDS; i++) {
-        pthread_join(**(thds + i), NULL);
+        pthread_join(**(thds + i), &fpcounter);
+        this->fpcounter += *((int *)fpcounter);
     }
+
+    //miningInfo *arg = new miningInfo;
+    //arg->task_id = 0;
+    //arg->idx_front = 0;
+    //arg->idx_end = fp.size() - 1;
+    //arg->fp = &fp;
+    //miningInfo_helper *arg_helper = new miningInfo_helper;
+    //arg_helper->tree = this;
+    //arg_helper->info = arg;
+    //cout << "fp.size() = " << fp.size() << endl;
+    //int result = parallel_mining(arg_helper);
+    //this->fpcounter = result;
+
     // we will mining the condition tree for each item
     printf("mining time: %.2fs\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
 
@@ -95,7 +111,9 @@ void fptree::mining(){
 }
 
 void *fptree::parallel_mining(void *helper_arg){
-    int *counter = 0;
+    clock_t tStart = clock();
+    int *counter = new int;
+    (*counter) = 0;
     fptree *main_fptree = ((miningInfo_helper *)helper_arg)->tree;
     miningInfo *mining_info = ((miningInfo_helper *)helper_arg)->info;
 
@@ -105,6 +123,7 @@ void *fptree::parallel_mining(void *helper_arg){
 
     for (int i = idx_front; i <= idx_end; i++) {
         int item = (*fp)[i].first;
+        //cout << "mining item: " << item << endl;
         (*counter) += 1;
         int support = 0;
         fpnode *nxtPtr = (*fp)[i].second;
@@ -149,16 +168,18 @@ void *fptree::parallel_mining(void *helper_arg){
             condtree->addTrans(&(it->second), sup, &condsupCounter);
         }
         
+        list<int> condtrans;
+        condtrans.push_back(item);
+
+        //showSupTransList(&condtrans, support);
+
         if(condtree->root->eldest == nullptr){
             continue;
         }
 
-
-        list<int> condtrans;
         stack<fptree*> condtree_stack;
         stack<map<int, fpnode*>::iterator> condhtptr_stack;
 
-        condtrans.push_back(item);
         condtree_stack.push(condtree);
         map<int, fpnode*>::iterator ht_it = condtree->htable->begin();
         condhtptr_stack.push(ht_it);
@@ -222,10 +243,10 @@ void *fptree::parallel_mining(void *helper_arg){
                 p_condtree->addTrans(&(p_itt->second), p_sup, &p_condsupCounter);
             }
 
-            //showSupTransList(condtrans, support);
+            //showSupTransList(&condtrans, p_support);
             //condtree->fpcounter += 1;
 
-            if(p_condtree->root->eldest != nullptr){
+            if(p_condtree->root->eldest == nullptr){
                 condtrans.pop_back();
                 continue;
             }
@@ -236,7 +257,9 @@ void *fptree::parallel_mining(void *helper_arg){
 
         }
     }
-    return( void*) counter;
+    cout << "from " << idx_front << " to " << idx_end << endl;
+    printf("mining time: %.2fs\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
+    return (void *)counter;
 }
 
 void fptree::buildTree(string transFile, double minsup) {
